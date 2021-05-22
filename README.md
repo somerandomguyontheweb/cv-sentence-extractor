@@ -5,6 +5,7 @@
 Right now this tool supports extractions from the following sources:
 
 * Wikipedia - max 3 sentences per articles
+* Simple files with one sentence per line
 
 For a source to be added, the dataset needs to be vetted by Mozilla to check license compatibility. If you know about a good source, please start a topic on [Discourse](https://discourse.mozilla.org/c/voice/). Once it's been verified that a source can be used, check the "Adding another scrape target" further below.
 
@@ -62,9 +63,17 @@ cargo run -- extract -l en -d ../wikiextractor/text/ >> wiki.en.txt
 
 *Tip: You don't need this last process to finish to start observing the output, wiki.en.txt should get a few thousands sentences in just a few minutes, and you can use that as a way to estimate the quality of the output early on and stop the process if you are not happy.*
 
+### Extract from line break separated files
+
+If you have one or multiple files with one sentence per line, you can use this extractor to extract sentences from these files applying the defined language rules. This can be useful if you have a large list of sentences and you want to only have sentences which match the rules.
+
+```
+cargo run -- extract-file -l en -d ../texts/ >> file.en.txt
+```
+
 ## Using language rules
 
-The following rules can be configured per language. Add a `<language>.toml` file in the `rules` directory to enable a new locale.
+The following rules can be configured per language. Add a `<language>.toml` file in the `rules` directory to enable a new locale. Note that the `replacements` get applied before any other rules are checked.
 
 | Name   |      Description      |  Values | Default |
 |--------|-----------------------|---------|---------|
@@ -85,7 +94,7 @@ The following rules can be configured per language. Add a `<language>.toml` file
 | needs_uppercase_start |  If a sentence needs to start with an uppercase | boolean | false
 | other_patterns |  Rust regex to disallow anything else | Rust Regex Array | all other patterns allowed
 | quote_start_with_letter |  If a quote needs to start with a letter | boolean | true
-| replacements |  Replaces abbreviations or other words according to configuration | Array of replacement configurations: each configuration is an Array of two values: `["search", "replacement"]`. See example below. | nothing gets replaced
+| replacements |  Replaces abbreviations or other words according to configuration. This happens before any other rules are checked. | Array of replacement configurations: each configuration is an Array of two values: `["search", "replacement"]`. See example below. | nothing gets replaced
 
 ### Example for `matching_symbols`
 
@@ -179,17 +188,22 @@ In order to get your language rules and blocklist incorporated in this repo, you
 
 - How many sentences did you get at the end?
 - How did you create the blocklist file?
-- Get at least 3 different native speakers (ideally linguistics) to review a random sample of 100-500 sentences and estimate the average error ratio and comment (or link their comment) in the PR.
+- Get at least 3 different native speakers (ideally linguistics) to review a random sample of 100-500 sentences and estimate the average error ratio and comment (or link their comment) in the PR. You can use [this template](https://docs.google.com/spreadsheets/d/1dJpysfcwmUwR4oJuw5ttGcUFYLeTbmn50Fpufz9qx-8/edit#gid=0) to simplify review.
 
-Once we have your rules into the repo, we will be able to run the extraction from our side and incorporate the sentences into the Common Voice repo. But please take note that we have limited resources and we can't guarantee a specific date for us to run this process (we are looking into automating it).
+Once we have your rules into the repo, we will run an automatic extraction and submit those sentences to Common Voice. This means that you can't manually adjust the sample output you've used for review as these changes would be lost.
 
 ## Adding another scrape target
 
 If you find a new open data source that provides a lot of sentences ([Example](https://discourse.mozilla.org/t/using-the-europarl-dataset-with-sentences-from-speeches-from-the-european-parliament/50184/36)), we suggest to not go through through the Sentence Collector but rather adding a scrape target here. Before you do so, let's discuss it on [Discourse](https://discourse.mozilla.org/c/voice/) first!
 
+* In `loaders` add your own loader file and write your own code according to the given data structure of your target - the data structure should be fairly simple, you might need to consider writing a separate script to fetch and prepare the sentences first (as we do with the WikiExtractor for Wikipedia). Note that you'll need to implement the `Loader` trait.
+* In `loaders/mod.rs` expose your new file
 * In `app.rs`, add a new extraction command - same arguments as the `extract` task, but with a better - more descriptive - name identifying your data source
-* In `loader.rs` write your own loader according to the data structure - the data structure should be fairly simple, you might need to consider writing a separate script to fetch and prepare the sentences first (as we do with the WikiExtractor for Wikipedia)
-* In `app.rs` add a new `else if` in the `start` function to generate your config and start the extraction, passing your own custom loader you wrote
+* In `app.rs` add a new `if` in the `start` function to instantiate your extractor and start the extraction, passing your own custom extractor you wrote
+* Add a new section in this README documenting the usage and purpose of your new target
+* Add your new target to the list at the top of the README
+
+You can find an example in the [File Loader Commit](https://github.com/Common-Voice/cv-sentence-extractor/commit/c0f3c81f021b7c7bc96bc01302af54422d69c193). Note that code might have slightly changed, but the concept is the same.
 
 ## Automatic extraction
 
@@ -199,7 +213,7 @@ Currently the following data sources are available for automatic extraction:
 
 ### On every Pull Request
 
-On every PR we will [trigger a sample sentence extraction](https://discourse.mozilla.org/t/scraper-automatic-sample-sentences-extracted-in-pull-request/55217/3) which can be used for verification.
+On every PR we will [trigger a sample sentence extraction](https://discourse.mozilla.org/t/scraper-automatic-sample-sentences-extracted-in-pull-request/55217/3) which can be used for verification. Note that [GitHub does not automatically run](https://github.blog/2021-04-22-github-actions-update-helping-maintainers-combat-bad-actors/) the pipeline if you are a first time contributor. If your sample extraction doesn't get approved within a day, please reach out to us on [Matrix](https://matrix.to/#/#common-voice-sentence-extractor:mozilla.org?web-instance[element.io]=chat.mozilla.org).
 
 ### On pushes to master
 
